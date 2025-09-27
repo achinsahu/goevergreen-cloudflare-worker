@@ -3,24 +3,12 @@ main = "src/index.js"
 compatibility_date = "2024-09-25"
 compatibility_flags = ["nodejs_compat"]
 
-# Production environment configuration
-[env.production]
-route = "goevergreen.shop/*"
-
-# D1 Database binding for production
-# IMPORTANT: Replace YOUR_DATABASE_ID_HERE with actual database ID after creating database
-[[env.production.d1_databases]]
+# D1 Database binding
+# IMPORTANT: You only need to configure ONE database in Cloudflare GUI
+[[d1_databases]]
 binding = "DB"
 database_name = "goevergreen-db"
-database_id = "YOUR_DATABASE_ID_HERE"
-
-# Development environment (optional)
-[env.development]
-
-[[env.development.d1_databases]]
-binding = "DB"
-database_name = "goevergreen-db-dev"
-database_id = "YOUR_DEV_DATABASE_ID_HERE"
+# database_id will be automatically set by Cloudflare GUI when you bind the database
 
 # Environment variables
 [vars]
@@ -29,31 +17,38 @@ DOMAIN = "goevergreen.shop"
 CONTACT_EMAIL = "info@goevergreen.shop"
 WORDPRESS_BASE_URL = "https://goevergreen9.wordpress.com"
 
-# Deployment configuration for GUI deployment
+# Build configuration for GUI deployment
 [build]
 command = "echo 'No build step required'"
 
-# Worker limits (adjust as needed)
+# Worker resource limits
 [limits]
-# CPU time limit in milliseconds (max 30000 for paid plans)
 cpu_ms = 10000
 
-# Custom domains will be configured in Cloudflare dashboard
-# After deployment:
-# 1. Go to Workers & Pages > Your Worker > Custom Domains
-# 2. Add goevergreen.shop
-# 3. Ensure DNS is configured in Cloudflare Dashboard
-
-# DEPLOYMENT NOTES:
-# 1. Create D1 database first: wrangler d1 create goevergreen-db
-# 2. Replace YOUR_DATABASE_ID_HERE with actual database ID
-# 3. Apply migrations: wrangler d1 migrations apply goevergreen-db --remote
-# 4. Deploy worker: wrangler deploy --env production
-# 5. Configure custom domain in Cloudflare dashboard
-
-# For GUI deployment from GitHub:
-# 1. Connect GitHub repository in Cloudflare dashboard
-# 2. Set build command to: echo "No build required"
-# 3. Set root directory to: (empty/root)
-# 4. Configure environment variables in dashboard
-# 5. Create and configure D1 database in dashboard
+# DEPLOYMENT INSTRUCTIONS FOR CLOUDFLARE GUI:
+# 
+# 1. DATABASE SETUP:
+#    - Go to Cloudflare Dashboard > D1
+#    - Create new database named: goevergreen-db
+#    - Copy the schema from migrations/0001_initial.sql
+#    - Execute it in the D1 Console
+#
+# 2. WORKER SETUP:
+#    - Go to Workers & Pages > Create Application > Pages
+#    - Connect to GitHub: achinsahu/goevergreen-cloudflare-worker
+#    - Build command: echo "No build required"
+#    - Build output directory: /
+#
+# 3. BIND DATABASE:
+#    - In Worker Settings > Variables
+#    - Add D1 Database Binding:
+#      * Variable name: DB
+#      * D1 database: goevergreen-db
+#
+# 4. CUSTOM DOMAIN:
+#    - Go to Triggers > Add Custom Domain
+#    - Enter: goevergreen.shop
+#    - Configure DNS if needed
+#
+# That's it! No need to manually enter database IDs - 
+# Cloudflare GUI handles the binding automatically.
