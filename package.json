@@ -1,0 +1,29 @@
+{
+  "name": "goevergreen-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for GoEvergreen.shop - Wellness website proxy",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "d1:create": "wrangler d1 create goevergreen-db",
+    "d1:migrate": "wrangler d1 migrations apply goevergreen-db --env production",
+    "d1:migrate:dev": "wrangler d1 migrations apply goevergreen-db --local"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "wellness",
+    "health",
+    "women-health",
+    "fitness",
+    "nutrition"
+  ],
+  "author": "GoEvergreen Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "wrangler": "^3.78.0"
+  }
+}
