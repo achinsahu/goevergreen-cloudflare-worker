@@ -1,19 +1,38 @@
 /**
  * WordPress Content Proxy Utilities
  * Fetches and processes content from WordPress site with robust error handling
+ * Now includes CSS preservation and admin panel routing
  */
 
 const WORDPRESS_BASE_URL = 'https://goevergreen9.wordpress.com';
-const FETCH_TIMEOUT = 10000; // 10 seconds
+const FETCH_TIMEOUT = 15000; // 15 seconds for admin pages
 const MAX_RETRIES = 2;
 
-export async function getPageContent(route, env) {
+// WordPress admin URLs that should be proxied without custom header/footer
+const ADMIN_PATHS = [
+  '/wp-admin',
+  '/wp-login.php',
+  '/wp-content',
+  '/wp-includes',
+  '/xmlrpc.php',
+  '/wp-json',
+  '/wp-cron.php'
+];
+
+export async function getPageContent(route, env, isAdmin = false) {
   let lastError = null;
   
   // Try fetching with retries
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const wordpressUrl = `${env.WORDPRESS_BASE_URL || WORDPRESS_BASE_URL}/${route === 'home' ? '' : route}/`;
+      let wordpressUrl;
+      
+      // Handle admin routes differently
+      if (isAdmin) {
+        wordpressUrl = `${env.WORDPRESS_BASE_URL || WORDPRESS_BASE_URL}${route}`;
+      } else {
+        wordpressUrl = `${env.WORDPRESS_BASE_URL || WORDPRESS_BASE_URL}/${route === 'home' ? '' : route}/`;
+      }
       
       // Create abort controller for timeout
       const controller = new AbortController();
@@ -27,7 +46,10 @@ export async function getPageContent(route, env) {
           'User-Agent': 'GoEvergreen-Proxy/1.0 (Wellness Website)',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Referer': env.WORDPRESS_BASE_URL || WORDPRESS_BASE_URL,
+          // Forward cookies for admin authentication
+          ...(isAdmin && { 'Cookie': getCookiesFromRequest() })
         }
       });
       
@@ -43,8 +65,12 @@ export async function getPageContent(route, env) {
         throw new Error('Empty response from WordPress');
       }
       
-      // Process and clean the HTML
-      return processWordPressHTML(html, route, env);
+      // Process HTML differently for admin vs regular pages
+      if (isAdmin) {
+        return processWordPressAdminHTML(html, route, env, response);
+      } else {
+        return processWordPressHTML(html, route, env);
+      }
       
     } catch (error) {
       lastError = error;
@@ -62,49 +88,84 @@ export async function getPageContent(route, env) {
   }
   
   console.error(`All WordPress fetch attempts failed for route ${route}:`, lastError?.message);
+  
+  if (isAdmin) {
+    // Return minimal admin error page
+    return {
+      content: '<div class="admin-error">Admin panel temporarily unavailable. Please try again.</div>',
+      isAdmin: true,
+      title: 'Admin Panel - GoEvergreen',
+      description: 'WordPress Admin Panel'
+    };
+  }
+  
   return getFallbackContent(route, env);
+}
+
+function processWordPressAdminHTML(html, route, env, response) {
+  try {
+    // For admin pages, preserve most of the original HTML but update domains
+    let processedHTML = html
+      // Update WordPress.com references to custom domain
+      .replace(/goevergreen9\.wordpress\.com/gi, env.DOMAIN || 'goevergreen.shop')
+      .replace(/https:\/\/wordpress\.com/gi, `https://${env.DOMAIN || 'goevergreen.shop'}`)
+      
+      // Keep admin functionality but update branding where safe
+      .replace(/WordPress\.com/gi, 'GoEvergreen Admin')
+      .replace(/wp\.com/gi, env.DOMAIN || 'goevergreen.shop');
+    
+    // Extract cookies for session management
+    const cookies = response.headers.get('set-cookie') || '';
+    
+    return {
+      content: processedHTML,
+      isAdmin: true,
+      title: extractTitle(html, route) || 'GoEvergreen Admin',
+      description: 'WordPress Admin Panel for GoEvergreen',
+      cookies: cookies
+    };
+  } catch (error) {
+    console.error('Admin HTML processing error:', error);
+    return {
+      content: '<div class="admin-error">Admin panel processing failed. Please try again.</div>',
+      isAdmin: true,
+      title: 'Admin Error - GoEvergreen',
+      description: 'WordPress Admin Panel Error'
+    };
+  }
 }
 
 function processWordPressHTML(html, route, env) {
   try {
-    // Remove WordPress branding and unwanted elements
+    // Extract CSS links and inline styles BEFORE removing content
+    const cssLinks = extractCSSLinks(html);
+    const inlineStyles = extractInlineStyles(html);
+    
+    // Remove WordPress branding and unwanted elements while preserving CSS
     let processedHTML = html
-      // Remove WordPress.com branding
+      // Remove WordPress.com branding but keep functional elements
       .replace(/Design a site like this with WordPress\.com[\s\S]*?Get started/gi, '')
-      .replace(/wordpress\.com/gi, '')
-      .replace(/wp-content/gi, 'assets')
-      .replace(/wp-admin/gi, '')
-      .replace(/wp-includes/gi, '')
-      
-      // Remove WordPress toolbar and admin elements
-      .replace(/<div[^>]*class="[^"]*wp-[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<script[^>]*wp-[^>]*[\s\S]*?<\/script>/gi, '')
-      .replace(/<link[^>]*wp-[^>]*[^>]*>/gi, '')
-      
-      // Remove "Skip to content" link
-      .replace(/Skip to content/gi, '')
-      
-      // Clean up WordPress-specific CSS classes
-      .replace(/wp-block-/gi, 'content-block-')
-      .replace(/\bwordpress\b/gi, 'goevergreen')
-      
-      // Remove subscription forms and WordPress branding
-      .replace(/<form[^>]*subscribe[^>]*>[\s\S]*?<\/form>/gi, '')
-      .replace(/Subscribe[\s\n]*Subscribed/gi, '')
-      .replace(/Already have a WordPress\.com account\?[\s\S]*?Log in now\./gi, '')
-      
-      // Remove WordPress footer elements
-      .replace(/Report this content[\s\S]*?Collapse this bar/gi, '')
-      .replace(/Powered by WordPress\.com/gi, '')
       .replace(/Create a website or blog at WordPress\.com/gi, '')
+      .replace(/Powered by WordPress\.com/gi, '')
       
-      // Remove WordPress navigation elements
-      .replace(/<nav[^>]*wp-[^>]*>[\s\S]*?<\/nav>/gi, '')
-      .replace(/<div[^>]*wp-nav[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove admin-specific elements from public pages
+      .replace(/<div[^>]*id="wpadminbar"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<script[^>]*wp-admin[^>]*>[\s\S]*?<\/script>/gi, '')
       
-      // Remove WordPress comments system
-      .replace(/<div[^>]*comment[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/Leave a comment/gi, '')
+      // Remove subscription forms but keep other forms
+      .replace(/<form[^>]*class="[^"]*subscribe[^"]*"[^>]*>[\s\S]*?<\/form>/gi, '')
+      .replace(/Subscribe[\s\n]*Subscribed/gi, '')
+      
+      // Remove WordPress.com promotional elements
+      .replace(/Already have a WordPress\.com account\?[\s\S]*?Log in now\./gi, '')
+      .replace(/Report this content[\s\S]*?Collapse this bar/gi, '')
+      
+      // Clean up navigation but preserve structure
+      .replace(/"Skip to content"/gi, '"Skip to main content"')
+      
+      // Update internal links to use custom domain
+      .replace(/https:\/\/goevergreen9\.wordpress\.com/gi, `https://${env.DOMAIN || 'goevergreen.shop'}`)
+      .replace(/goevergreen9\.wordpress\.com/gi, env.DOMAIN || 'goevergreen.shop')
       
       // Clean up empty elements
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
@@ -113,6 +174,17 @@ function processWordPressHTML(html, route, env) {
     
     // Extract main content more reliably
     let mainContent = extractMainContent(processedHTML);
+    
+    // Preserve extracted CSS
+    if (cssLinks.length > 0 || inlineStyles) {
+      const cssSection = `
+        <!-- Preserved WordPress CSS -->
+        ${cssLinks.join('\n        ')}
+        ${inlineStyles ? `<style>${inlineStyles}</style>` : ''}
+        <!-- End WordPress CSS -->
+      `;
+      mainContent = cssSection + mainContent;
+    }
     
     // If no content extracted, use fallback
     if (!mainContent || mainContent.trim().length < 50) {
@@ -124,7 +196,9 @@ function processWordPressHTML(html, route, env) {
       content: mainContent.trim(),
       route: route,
       title: extractTitle(html, route),
-      description: extractDescription(html, route)
+      description: extractDescription(html, route),
+      cssLinks: cssLinks,
+      isAdmin: false
     };
   } catch (error) {
     console.error('HTML processing error:', error);
@@ -132,21 +206,65 @@ function processWordPressHTML(html, route, env) {
   }
 }
 
+function extractCSSLinks(html) {
+  const cssLinks = [];
+  const linkRegex = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi;
+  let match;
+  
+  while ((match = linkRegex.exec(html)) !== null) {
+    let link = match[0];
+    // Update WordPress.com CSS URLs to use proxy or CDN
+    link = link.replace(/https:\/\/[^\s"']+\.wordpress\.com/gi, '');
+    // Only include if it's not an admin-specific stylesheet
+    if (!link.includes('wp-admin') && !link.includes('login')) {
+      cssLinks.push(link);
+    }
+  }
+  
+  return cssLinks;
+}
+
+function extractInlineStyles(html) {
+  const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let styles = '';
+  let match;
+  
+  while ((match = styleRegex.exec(html)) !== null) {
+    const styleContent = match[1];
+    // Skip admin-specific styles
+    if (!styleContent.includes('wp-admin') && !styleContent.includes('#wpadminbar')) {
+      styles += styleContent + '\n';
+    }
+  }
+  
+  return styles.trim();
+}
+
 function extractMainContent(html) {
-  // Try multiple selectors to find main content
+  // Try multiple selectors to find main content, prioritizing semantic elements
   const contentSelectors = [
     /<main[^>]*>([\s\S]*?)<\/main>/i,
     /<article[^>]*>([\s\S]*?)<\/article>/i,
     /<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    /<div[^>]*class="[^"]*post-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
     /<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-    /<div[^>]*class="[^"]*post[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    /<div[^>]*id="content"[^>]*>([\s\S]*?)<\/div>/i,
+    /<section[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/section>/i,
     /<body[^>]*>([\s\S]*?)<\/body>/i
   ];
   
   for (const selector of contentSelectors) {
     const match = html.match(selector);
     if (match && match[1] && match[1].trim().length > 100) {
-      return match[1].trim();
+      let content = match[1].trim();
+      // Remove header and footer from extracted content
+      content = content.replace(/<header[\s\S]*?<\/header>/gi, '');
+      content = content.replace(/<footer[\s\S]*?<\/footer>/gi, '');
+      content = content.replace(/<nav[^>]*class="[^"]*main[^"]*"[^>]*>[\s\S]*?<\/nav>/gi, '');
+      
+      if (content.trim().length > 50) {
+        return content.trim();
+      }
     }
   }
   
@@ -160,6 +278,7 @@ function extractTitle(html, route) {
   let title = titleMatch ? titleMatch[1]
     .replace(/\s*–\s*WordPress\.com/gi, '')
     .replace(/\s*\|\s*WordPress\.com/gi, '')
+    .replace(/WordPress\.com/gi, '')
     .trim() : '';
   
   // Custom titles for better SEO
@@ -201,6 +320,16 @@ function extractDescription(html, route) {
   };
   
   return customDescriptions[route] || description || 'GoEvergreen - Premium wellness and health guidance for women';
+}
+
+function getCookiesFromRequest() {
+  // This would be implemented to forward authentication cookies
+  // For now, return empty string
+  return '';
+}
+
+export function isAdminPath(pathname) {
+  return ADMIN_PATHS.some(path => pathname.startsWith(path));
 }
 
 function getFallbackContent(route, env) {
