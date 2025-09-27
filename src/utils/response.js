@@ -1,7 +1,11 @@
 /**
  * Response utilities for creating custom HTML responses
  * with proper SEO optimization and branding
+ * Now includes admin panel support and improved newsletter handling
  */
+
+import { generateHeader, getHeaderStyles } from '../components/header.js';
+import { generateFooter, getFooterStyles } from '../components/footer.js';
 
 export function createCustomResponse(contentData, pathname, env) {
   const { content, title, description, route } = contentData;
@@ -27,6 +31,63 @@ export function createCustomResponse(contentData, pathname, env) {
   });
 }
 
+export function createAdminResponse(contentData, pathname, env) {
+  const { content, title, description, cookies } = contentData;
+  
+  // For admin pages, return minimal HTML with preserved WordPress admin structure
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(title || 'GoEvergreen Admin')}</title>
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Preserve WordPress admin styles and scripts -->
+    ${extractWordPressAssets(content)}
+</head>
+<body class="wp-admin">
+    ${content}
+</body>
+</html>`;
+  
+  const response = new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN'
+    }
+  });
+  
+  // Forward any cookies from WordPress
+  if (cookies) {
+    response.headers.set('Set-Cookie', cookies);
+  }
+  
+  return response;
+}
+
+function extractWordPressAssets(html) {
+  // Extract CSS and JS from WordPress admin
+  const assets = [];
+  
+  // Extract stylesheets
+  const cssRegex = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi;
+  let match;
+  while ((match = cssRegex.exec(html)) !== null) {
+    assets.push(match[0]);
+  }
+  
+  // Extract scripts
+  const jsRegex = /<script[^>]*src=[^>]*><\/script>/gi;
+  while ((match = jsRegex.exec(html)) !== null) {
+    assets.push(match[0]);
+  }
+  
+  return assets.join('\n    ');
+}
+
 function generateHTMLTemplate({ title, description, content, pathname, contactEmail, domain }) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -42,13 +103,13 @@ function generateHTMLTemplate({ title, description, content, pathname, contactEm
     <meta property="og:description" content="${escapeHtml(description)}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://${domain}${pathname}">
-    <meta property="og:image" content="https://${domain}/assets/logo.jpg">
+    <meta property="og:image" content="https://${domain}/assets/favicon.ico">
     <meta property="og:site_name" content="GoEvergreen">
     
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
-    <meta name="twitter:image" content="https://${domain}/assets/logo.jpg">
+    <meta name="twitter:image" content="https://${domain}/assets/favicon.ico">
     
     <!-- Schema.org markup -->
     <script type="application/ld+json">
@@ -58,7 +119,7 @@ function generateHTMLTemplate({ title, description, content, pathname, contactEm
       "name": "GoEvergreen",
       "description": "${escapeHtml(description)}",
       "url": "https://${domain}",
-      "logo": "https://${domain}/assets/logo.jpg",
+      "logo": "https://${domain}/assets/favicon.ico",
       "contactPoint": {
         "@type": "ContactPoint",
         "email": "${contactEmail}",
@@ -70,40 +131,19 @@ function generateHTMLTemplate({ title, description, content, pathname, contactEm
     <title>${escapeHtml(title)}</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
-    <link rel="apple-touch-icon" href="/assets/logo.jpg">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/assets/favicon.ico">
     
     <!-- Styles -->
     <style>
         ${getCustomCSS()}
+        ${getHeaderStyles()}
+        ${getFooterStyles()}
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="site-header">
-        <div class="header-container">
-            <div class="logo-section">
-                <img src="/assets/logo.jpg" alt="GoEvergreen Logo" class="logo">
-                <h1 class="site-title">GoEvergreen</h1>
-            </div>
-            
-            <nav class="main-navigation">
-                <ul class="nav-menu">
-                    <li><a href="/" class="${pathname === '/' ? 'active' : ''}">Home</a></li>
-                    <li><a href="/wellness-guides" class="${pathname === '/wellness-guides' ? 'active' : ''}">Wellness Guides</a></li>
-                    <li><a href="/benefits-of-exercises" class="${pathname === '/benefits-of-exercises' ? 'active' : ''}">Exercise Benefits</a></li>
-                    <li><a href="/blog" class="${pathname === '/blog' ? 'active' : ''}">Blog</a></li>
-                    <li><a href="/reviews" class="${pathname === '/reviews' ? 'active' : ''}">Reviews</a></li>
-                    <li><a href="/about" class="${pathname === '/about' ? 'active' : ''}">About</a></li>
-                    <li><a href="/contact-us" class="${pathname === '/contact-us' ? 'active' : ''}">Contact</a></li>
-                </ul>
-            </nav>
-            
-            <div class="header-cta">
-                <a href="#newsletter" class="cta-button">Get Expert Guidance</a>
-            </div>
-        </div>
-    </header>
+    ${generateHeader(pathname, { DOMAIN: domain, CONTACT_EMAIL: contactEmail })}
     
     <!-- Main Content -->
     <main class="main-content">
@@ -115,55 +155,25 @@ function generateHTMLTemplate({ title, description, content, pathname, contactEm
     <!-- Newsletter Section -->
     <section id="newsletter" class="newsletter-section">
         <div class="newsletter-container">
-            <h2>Subscribe for Expert Wellness Guidance</h2>
-            <p>Get personalized health tips, workout routines, and nutrition advice delivered to your inbox.</p>
-            <form class="newsletter-form" id="newsletterForm">
-                <input type="email" name="email" placeholder="Enter your email" required>
-                <input type="text" name="name" placeholder="Your name (optional)">
-                <button type="submit">Subscribe Now</button>
-            </form>
+            <div id="newsletter-form-container">
+                <h2>Subscribe for Expert Wellness Guidance</h2>
+                <p>Get personalized health tips, workout routines, and nutrition advice delivered to your inbox.</p>
+                <form class="newsletter-form" id="newsletterForm">
+                    <input type="email" name="email" placeholder="Enter your email" required>
+                    <input type="text" name="name" placeholder="Your name (optional)">
+                    <button type="submit">Subscribe Now</button>
+                </form>
+            </div>
+            <div id="newsletter-success" class="newsletter-success" style="display: none;">
+                <h2>✅ Successfully Subscribed!</h2>
+                <p>Thank you for joining our wellness community! Check your email for a confirmation message.</p>
+                <p>You'll receive expert wellness tips, fitness guidance, and nutrition advice tailored specifically for women.</p>
+            </div>
             <div id="newsletter-message" class="form-message"></div>
         </div>
     </section>
     
-    <!-- Footer -->
-    <footer class="site-footer">
-        <div class="footer-container">
-            <div class="footer-section">
-                <h3>GoEvergreen</h3>
-                <p>Empowering women with premium wellness guidance and health solutions.</p>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Quick Links</h4>
-                <ul>
-                    <li><a href="/wellness-guides">Wellness Guides</a></li>
-                    <li><a href="/benefits-of-exercises">Exercise Benefits</a></li>
-                    <li><a href="/about">About Us</a></li>
-                    <li><a href="/reviews">Reviews</a></li>
-                </ul>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Support</h4>
-                <ul>
-                    <li><a href="/contact-us">Contact Us</a></li>
-                    <li><a href="/privacy-policy">Privacy Policy</a></li>
-                    <li><a href="/donate">Support Our Mission</a></li>
-                </ul>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Connect With Us</h4>
-                <p>Email: <a href="mailto:${contactEmail}">${contactEmail}</a></p>
-                <p>For expert guidance and personalized support</p>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <p>&copy; 2025 GoEvergreen. All rights reserved. | <a href="/privacy-policy">Privacy Policy</a></p>
-        </div>
-    </footer>
+    ${generateFooter(pathname, { DOMAIN: domain, CONTACT_EMAIL: contactEmail })}
     
     <!-- JavaScript -->
     <script>
@@ -187,84 +197,6 @@ function getCustomCSS() {
         line-height: 1.6;
         color: #2c3e35;
         background-color: #fafaf8;
-    }
-    
-    /* Header Styles */
-    .site-header {
-        background: linear-gradient(135deg, #7a9b8e 0%, #a8c09a 100%);
-        box-shadow: 0 2px 10px rgba(122, 155, 142, 0.2);
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-    }
-    
-    .header-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1rem 2rem;
-        flex-wrap: wrap;
-    }
-    
-    .logo-section {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-    
-    .logo {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        object-fit: cover;
-    }
-    
-    .site-title {
-        color: white;
-        font-size: 1.8rem;
-        font-weight: 600;
-        letter-spacing: -0.5px;
-    }
-    
-    .main-navigation ul {
-        display: flex;
-        list-style: none;
-        gap: 2rem;
-        flex-wrap: wrap;
-    }
-    
-    .main-navigation a {
-        color: white;
-        text-decoration: none;
-        font-weight: 500;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        transition: all 0.3s ease;
-    }
-    
-    .main-navigation a:hover,
-    .main-navigation a.active {
-        background: rgba(255, 255, 255, 0.2);
-        transform: translateY(-2px);
-    }
-    
-    .cta-button {
-        background: #f4f4f2;
-        color: #7a9b8e;
-        padding: 0.8rem 1.5rem;
-        border-radius: 25px;
-        text-decoration: none;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
-    
-    .cta-button:hover {
-        background: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     }
     
     /* Main Content */
@@ -343,11 +275,36 @@ function getCustomCSS() {
         transform: translateY(-2px);
     }
     
+    .newsletter-form button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .newsletter-success {
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 5px 25px rgba(122, 155, 142, 0.1);
+        border: 2px solid #7a9b8e;
+    }
+    
+    .newsletter-success h2 {
+        color: #7a9b8e;
+        margin-bottom: 1rem;
+    }
+    
+    .newsletter-success p {
+        color: #2c3e35;
+        margin-bottom: 1rem;
+    }
+    
     .form-message {
         margin-top: 1rem;
-        padding: 0.5rem;
-        border-radius: 5px;
+        padding: 1rem;
+        border-radius: 8px;
         display: none;
+        font-weight: 500;
     }
     
     .form-message.success {
@@ -362,54 +319,6 @@ function getCustomCSS() {
         color: #721c24;
         border: 1px solid #f5c6cb;
         display: block;
-    }
-    
-    /* Footer */
-    .site-footer {
-        background: #2c3e35;
-        color: #a8c09a;
-        padding: 3rem 0 1rem;
-    }
-    
-    .footer-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 2rem;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 2rem;
-    }
-    
-    .footer-section h3,
-    .footer-section h4 {
-        color: white;
-        margin-bottom: 1rem;
-    }
-    
-    .footer-section ul {
-        list-style: none;
-    }
-    
-    .footer-section ul li {
-        margin-bottom: 0.5rem;
-    }
-    
-    .footer-section a {
-        color: #a8c09a;
-        text-decoration: none;
-        transition: color 0.3s ease;
-    }
-    
-    .footer-section a:hover {
-        color: white;
-    }
-    
-    .footer-bottom {
-        max-width: 1200px;
-        margin: 2rem auto 0;
-        padding: 1rem 2rem;
-        border-top: 1px solid #4a5a4e;
-        text-align: center;
     }
     
     /* Content Styles */
@@ -486,14 +395,14 @@ function getCustomCSS() {
         margin-bottom: 1rem;
     }
     
-    .guide-grid {
+    .guide-grid, .benefits-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 2rem;
         margin: 2rem 0;
     }
     
-    .guide-card {
+    .guide-card, .benefit-card {
         background: white;
         padding: 2rem;
         border-radius: 15px;
@@ -501,28 +410,75 @@ function getCustomCSS() {
         transition: transform 0.3s ease;
     }
     
-    .guide-card:hover {
+    .guide-card:hover, .benefit-card:hover {
         transform: translateY(-5px);
     }
     
-    .guide-card h3 {
+    .guide-card h3, .benefit-card h3 {
         color: #7a9b8e;
         margin-bottom: 1rem;
+        font-size: 1.3rem;
+    }
+    
+    /* Contact styles */
+    .contact-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        margin: 2rem 0;
+    }
+    
+    .contact-method {
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 5px 25px rgba(122, 155, 142, 0.1);
+        text-align: center;
+    }
+    
+    .contact-method h3 {
+        color: #7a9b8e;
+        margin-bottom: 1rem;
+        font-size: 1.3rem;
+    }
+    
+    .contact-method a {
+        color: #7a9b8e;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .contact-method a:hover {
+        text-decoration: underline;
+    }
+    
+    /* About content */
+    .about-content {
+        background: white;
+        padding: 3rem;
+        border-radius: 15px;
+        box-shadow: 0 5px 25px rgba(122, 155, 142, 0.1);
+        margin: 2rem 0;
+    }
+    
+    .about-content h2 {
+        color: #7a9b8e;
+        margin-bottom: 1rem;
+        font-size: 1.8rem;
+    }
+    
+    .about-content ul {
+        margin: 1rem 0;
+        padding-left: 2rem;
+    }
+    
+    .about-content li {
+        margin-bottom: 0.5rem;
+        color: #5a6b5d;
     }
     
     /* Responsive Design */
     @media (max-width: 768px) {
-        .header-container {
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
-        .main-navigation ul {
-            flex-direction: column;
-            text-align: center;
-            gap: 1rem;
-        }
-        
         .newsletter-form {
             flex-direction: column;
             align-items: center;
@@ -542,19 +498,58 @@ function getCustomCSS() {
             flex-direction: column;
             align-items: center;
         }
+        
+        .features,
+        .guide-grid,
+        .benefits-grid,
+        .contact-info {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .newsletter-section {
+            padding: 2rem 0;
+        }
+        
+        .newsletter-section h2 {
+            font-size: 1.8rem;
+        }
+        
+        .hero-section {
+            padding: 2rem 1rem;
+        }
+        
+        .feature,
+        .guide-card,
+        .benefit-card,
+        .contact-method {
+            padding: 1.5rem;
+        }
     }
   `;
 }
 
 function getCustomJS() {
   return `
-    // Newsletter form handling
+    // Newsletter form handling with improved UX
     document.getElementById('newsletterForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const messageDiv = document.getElementById('newsletter-message');
+        const formContainer = document.getElementById('newsletter-form-container');
+        const successContainer = document.getElementById('newsletter-success');
+        const submitButton = this.querySelector('button[type="submit"]');
+        
         const email = this.email.value;
         const name = this.name.value;
+        
+        // Disable submit button
+        submitButton.disabled = true;
+        submitButton.textContent = 'Subscribing...';
+        
+        // Hide any previous messages
+        messageDiv.style.display = 'none';
         
         try {
             const response = await fetch('/api/newsletter', {
@@ -568,18 +563,56 @@ function getCustomJS() {
             const result = await response.json();
             
             if (result.success) {
-                messageDiv.textContent = 'Successfully subscribed! Check your email for confirmation.';
-                messageDiv.className = 'form-message success';
-                this.reset();
+                // Hide form and show success message
+                formContainer.style.display = 'none';
+                successContainer.style.display = 'block';
+                
+                // Add celebration effect
+                successContainer.style.animation = 'slideIn 0.5s ease-out';
+                
+                // Track subscription event
+                if (typeof gtag !== 'undefined') {
+                    gtag('event', 'newsletter_subscription', {
+                        event_category: 'engagement',
+                        event_label: 'newsletter_form'
+                    });
+                }
+                
             } else {
                 messageDiv.textContent = result.error || 'Subscription failed. Please try again.';
                 messageDiv.className = 'form-message error';
+                messageDiv.style.display = 'block';
+                
+                // Re-enable submit button
+                submitButton.disabled = false;
+                submitButton.textContent = 'Subscribe Now';
             }
         } catch (error) {
-            messageDiv.textContent = 'Network error. Please try again later.';
+            messageDiv.textContent = 'Network error. Please check your connection and try again.';
             messageDiv.className = 'form-message error';
+            messageDiv.style.display = 'block';
+            
+            // Re-enable submit button
+            submitButton.disabled = false;
+            submitButton.textContent = 'Subscribe Now';
         }
     });
+    
+    // Add CSS animation for success message
+    const style = document.createElement('style');
+    style.textContent = \`
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    \`;
+    document.head.appendChild(style);
     
     // Smooth scrolling for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -599,12 +632,50 @@ function getCustomJS() {
     function trackEvent(eventName, properties = {}) {
         // Simple analytics without third-party tracking
         console.log('Event:', eventName, properties);
+        
+        // Send to internal analytics if available
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/analytics/event', JSON.stringify({
+                event: eventName,
+                properties: properties,
+                timestamp: new Date().toISOString(),
+                path: window.location.pathname
+            }));
+        }
     }
     
     // Track page views
     trackEvent('page_view', {
         path: window.location.pathname,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent.substring(0, 100)
+    });
+    
+    // Track scroll depth
+    let maxScroll = 0;
+    window.addEventListener('scroll', function() {
+        const scrollPercent = Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100);
+        if (scrollPercent > maxScroll) {
+            maxScroll = scrollPercent;
+            if (maxScroll >= 75 && maxScroll < 80) {
+                trackEvent('scroll_depth', { depth: '75%' });
+            } else if (maxScroll >= 90) {
+                trackEvent('scroll_depth', { depth: '90%' });
+            }
+        }
+    });
+    
+    // Track link clicks
+    document.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A') {
+            const href = e.target.getAttribute('href');
+            if (href && href.startsWith('http') && !href.includes(window.location.hostname)) {
+                trackEvent('external_link_click', {
+                    url: href,
+                    text: e.target.textContent.trim().substring(0, 50)
+                });
+            }
+        }
     });
   `;
 }
