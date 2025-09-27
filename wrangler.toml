@@ -7,8 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "goevergreen-db"
-# database_id will be automatically set by Cloudflare GUI when you bind the database
-
+database_id = "4737589f-b16e-4f96-bc1b-0ad6b7ebc397"
 # Environment variables
 [vars]
 ENVIRONMENT = "production"
