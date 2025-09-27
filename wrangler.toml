@@ -1,10 +1,9 @@
-name = "goevergreen-worker"
+name = "worker-route"
 main = "src/index.js"
 compatibility_date = "2024-09-25"
 compatibility_flags = ["nodejs_compat"]
 
 # D1 Database binding
-# IMPORTANT: You only need to configure ONE database in Cloudflare GUI
 [[d1_databases]]
 binding = "DB"
 database_name = "goevergreen-db"
@@ -20,35 +19,3 @@ WORDPRESS_BASE_URL = "https://goevergreen9.wordpress.com"
 # Build configuration for GUI deployment
 [build]
 command = "echo 'No build step required'"
-
-# Worker resource limits
-[limits]
-cpu_ms = 10000
-
-# DEPLOYMENT INSTRUCTIONS FOR CLOUDFLARE GUI:
-# 
-# 1. DATABASE SETUP:
-#    - Go to Cloudflare Dashboard > D1
-#    - Create new database named: goevergreen-db
-#    - Copy the schema from migrations/0001_initial.sql
-#    - Execute it in the D1 Console
-#
-# 2. WORKER SETUP:
-#    - Go to Workers & Pages > Create Application > Pages
-#    - Connect to GitHub: achinsahu/goevergreen-cloudflare-worker
-#    - Build command: echo "No build required"
-#    - Build output directory: /
-#
-# 3. BIND DATABASE:
-#    - In Worker Settings > Variables
-#    - Add D1 Database Binding:
-#      * Variable name: DB
-#      * D1 database: goevergreen-db
-#
-# 4. CUSTOM DOMAIN:
-#    - Go to Triggers > Add Custom Domain
-#    - Enter: goevergreen.shop
-#    - Configure DNS if needed
-#
-# That's it! No need to manually enter database IDs - 
-# Cloudflare GUI handles the binding automatically.
