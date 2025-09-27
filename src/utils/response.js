@@ -4,7 +4,7 @@
  * Now includes admin panel support and improved newsletter handling
  */
 
-import { generateHeader, getHeaderStyles } from '../components/header.js';
+import { generateHeader, getHeaderStyles, getHeaderJS } from '../components/header.js';
 import { generateFooter, getFooterStyles } from '../components/footer.js';
 
 export function createCustomResponse(contentData, pathname, env) {
@@ -177,6 +177,7 @@ function generateHTMLTemplate({ title, description, content, pathname, contactEm
     
     <!-- JavaScript -->
     <script>
+        ${getHeaderJS()}
         ${getCustomJS()}
     </script>
 </body>
@@ -533,68 +534,73 @@ function getCustomCSS() {
 function getCustomJS() {
   return `
     // Newsletter form handling with improved UX
-    document.getElementById('newsletterForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const messageDiv = document.getElementById('newsletter-message');
-        const formContainer = document.getElementById('newsletter-form-container');
-        const successContainer = document.getElementById('newsletter-success');
-        const submitButton = this.querySelector('button[type="submit"]');
-        
-        const email = this.email.value;
-        const name = this.name.value;
-        
-        // Disable submit button
-        submitButton.disabled = true;
-        submitButton.textContent = 'Subscribing...';
-        
-        // Hide any previous messages
-        messageDiv.style.display = 'none';
-        
-        try {
-            const response = await fetch('/api/newsletter', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email, name })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                // Hide form and show success message
-                formContainer.style.display = 'none';
-                successContainer.style.display = 'block';
+    document.addEventListener('DOMContentLoaded', function() {
+        const newsletterForm = document.getElementById('newsletterForm');
+        if (newsletterForm) {
+            newsletterForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
                 
-                // Add celebration effect
-                successContainer.style.animation = 'slideIn 0.5s ease-out';
+                const messageDiv = document.getElementById('newsletter-message');
+                const formContainer = document.getElementById('newsletter-form-container');
+                const successContainer = document.getElementById('newsletter-success');
+                const submitButton = this.querySelector('button[type="submit"]');
                 
-                // Track subscription event
-                if (typeof gtag !== 'undefined') {
-                    gtag('event', 'newsletter_subscription', {
-                        event_category: 'engagement',
-                        event_label: 'newsletter_form'
+                const email = this.email.value;
+                const name = this.name.value;
+                
+                // Disable submit button
+                submitButton.disabled = true;
+                submitButton.textContent = 'Subscribing...';
+                
+                // Hide any previous messages
+                messageDiv.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/newsletter', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, name })
                     });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Hide form and show success message
+                        formContainer.style.display = 'none';
+                        successContainer.style.display = 'block';
+                        
+                        // Add celebration effect
+                        successContainer.style.animation = 'slideIn 0.5s ease-out';
+                        
+                        // Track subscription event
+                        if (typeof gtag !== 'undefined') {
+                            gtag('event', 'newsletter_subscription', {
+                                event_category: 'engagement',
+                                event_label: 'newsletter_form'
+                            });
+                        }
+                        
+                    } else {
+                        messageDiv.textContent = result.error || 'Subscription failed. Please try again.';
+                        messageDiv.className = 'form-message error';
+                        messageDiv.style.display = 'block';
+                        
+                        // Re-enable submit button
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Subscribe Now';
+                    }
+                } catch (error) {
+                    messageDiv.textContent = 'Network error. Please check your connection and try again.';
+                    messageDiv.className = 'form-message error';
+                    messageDiv.style.display = 'block';
+                    
+                    // Re-enable submit button
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Subscribe Now';
                 }
-                
-            } else {
-                messageDiv.textContent = result.error || 'Subscription failed. Please try again.';
-                messageDiv.className = 'form-message error';
-                messageDiv.style.display = 'block';
-                
-                // Re-enable submit button
-                submitButton.disabled = false;
-                submitButton.textContent = 'Subscribe Now';
-            }
-        } catch (error) {
-            messageDiv.textContent = 'Network error. Please check your connection and try again.';
-            messageDiv.className = 'form-message error';
-            messageDiv.style.display = 'block';
-            
-            // Re-enable submit button
-            submitButton.disabled = false;
-            submitButton.textContent = 'Subscribe Now';
+            });
         }
     });
     
