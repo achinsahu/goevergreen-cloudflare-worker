@@ -1,5 +1,5 @@
-import { createCustomResponse } from '../utils/response.js';
-import { getPageContent } from '../utils/wordpress.js';
+import { createCustomResponse, createAdminResponse } from '../utils/response.js';
+import { getPageContent, isAdminPath } from '../utils/wordpress.js';
 import { trackPageView } from '../utils/analytics.js';
 
 const ROUTES = {
@@ -21,6 +21,11 @@ export async function handleRequest(request, env, ctx) {
   const pathname = url.pathname;
   
   try {
+    // Handle WordPress admin panel routes - proxy directly without custom header/footer
+    if (isAdminPath(pathname)) {
+      return await handleAdminRequest(request, env, pathname);
+    }
+    
     // Handle static assets
     if (pathname.startsWith('/assets/')) {
       return await handleStaticAssets(pathname, env);
@@ -39,7 +44,7 @@ export async function handleRequest(request, env, ctx) {
     // Handle main page routing
     const route = ROUTES[pathname] || 'home';
     
-    // Track page view (non-blocking)
+    // Track page view (non-blocking) - not for admin pages
     ctx.waitUntil(trackPageView(env.DB, pathname, request));
     
     // Handle special routes
@@ -48,7 +53,7 @@ export async function handleRequest(request, env, ctx) {
     }
     
     // Get WordPress content or serve custom pages
-    const content = await getPageContent(route, env);
+    const content = await getPageContent(route, env, false);
     return createCustomResponse(content, pathname, env);
     
   } catch (error) {
@@ -57,30 +62,70 @@ export async function handleRequest(request, env, ctx) {
   }
 }
 
+async function handleAdminRequest(request, env, pathname) {
+  try {
+    console.log('Handling admin request:', pathname);
+    
+    // Forward admin requests directly to WordPress with minimal processing
+    const content = await getPageContent(pathname, env, true);
+    
+    if (content.isAdmin) {
+      return createAdminResponse(content, pathname, env);
+    }
+    
+    // Fallback for non-admin response
+    return createCustomResponse(content, pathname, env);
+    
+  } catch (error) {
+    console.error('Admin request error:', error);
+    return createErrorResponse('Admin panel temporarily unavailable', 503);
+  }
+}
+
 async function handleStaticAssets(pathname, env) {
   try {
     // Handle logo
     if (pathname === '/assets/logo.jpg') {
-      // Note: In a real deployment, you'd need to handle binary assets differently
-      // For now, we'll redirect to a placeholder or serve from a CDN
       return new Response(null, {
         status: 302,
         headers: {
-          'Location': 'https://via.placeholder.com/200x200/7a9b8e/ffffff?text=GoEvergreen',
+          'Location': 'https://drive.google.com/uc?export=view&id=1HRmgXWObMkh2PF1wUIvm1spL15PKIkXe',
           'Cache-Control': 'public, max-age=86400'
         }
       });
     }
     
-    // Handle favicon
-    if (pathname === '/assets/favicon.ico') {
+    // Handle favicon - use the Google Drive favicon
+    if (pathname === '/assets/favicon.ico' || pathname === '/favicon.ico') {
       return new Response(null, {
         status: 302,
         headers: {
-          'Location': 'https://via.placeholder.com/32x32/7a9b8e/ffffff?text=GE',
+          'Location': 'https://drive.google.com/uc?export=view&id=1HRmgXWObMkh2PF1wUIvm1spL15PKIkXe',
           'Cache-Control': 'public, max-age=86400'
         }
       });
+    }
+    
+    // Handle other assets by proxying to WordPress
+    if (pathname.startsWith('/assets/wp-content/') || pathname.startsWith('/wp-content/')) {
+      const wpAssetUrl = `${env.WORDPRESS_BASE_URL || 'https://goevergreen9.wordpress.com'}${pathname.replace('/assets', '')}`;
+      
+      const response = await fetch(wpAssetUrl, {
+        headers: {
+          'User-Agent': 'GoEvergreen-Proxy/1.0',
+          'Referer': env.WORDPRESS_BASE_URL || 'https://goevergreen9.wordpress.com'
+        }
+      });
+      
+      if (response.ok) {
+        return new Response(response.body, {
+          headers: {
+            'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream',
+            'Cache-Control': 'public, max-age=86400',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
     }
     
     return createErrorResponse('Asset not found', 404);
@@ -138,10 +183,17 @@ async function handleNewsletterSubscription(request, env) {
     email = email.trim().toLowerCase();
     name = name ? name.trim().substring(0, 100) : '';
     
-    // Store in D1 database
-    await env.DB.prepare(
-      'INSERT OR REPLACE INTO newsletter_subscribers (email, name, subscribed_at) VALUES (?, ?, ?)'
-    ).bind(email, name, new Date().toISOString()).run();
+    // Store in D1 database if available
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          'INSERT OR REPLACE INTO newsletter_subscribers (email, name, subscribed_at) VALUES (?, ?, ?)'
+        ).bind(email, name, new Date().toISOString()).run();
+      } catch (dbError) {
+        console.error('Database error during newsletter subscription:', dbError);
+        // Continue without database
+      }
+    }
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -195,10 +247,17 @@ async function handleContactAPI(request, env) {
     const sanitizedEmail = email.trim().toLowerCase();
     const sanitizedMessage = message.trim().substring(0, 1000);
     
-    // Store contact form submission
-    await env.DB.prepare(
-      'INSERT INTO contact_submissions (name, email, message, submitted_at) VALUES (?, ?, ?, ?)'
-    ).bind(sanitizedName, sanitizedEmail, sanitizedMessage, new Date().toISOString()).run();
+    // Store contact form submission if database available
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          'INSERT INTO contact_submissions (name, email, message, submitted_at) VALUES (?, ?, ?, ?)'
+        ).bind(sanitizedName, sanitizedEmail, sanitizedMessage, new Date().toISOString()).run();
+      } catch (dbError) {
+        console.error('Database error during contact form submission:', dbError);
+        // Continue without database
+      }
+    }
     
     return new Response(JSON.stringify({ 
       success: true,
@@ -218,6 +277,15 @@ async function handleContactAPI(request, env) {
 
 async function handleAnalyticsAPI(request, env) {
   try {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Analytics not available' 
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     // Simple analytics endpoint (you might want to add authentication)
     const stats = await env.DB.prepare(`
       SELECT 
