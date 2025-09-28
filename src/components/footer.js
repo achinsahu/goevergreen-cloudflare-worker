@@ -321,3 +321,32 @@ export function getFooterStyles() {
     }
   `;
 }
+// Hide/collapse newsletter after subscribing, and persist across navigations
+
+function hideNewsletterFormPermanently() {
+  // Hide the newsletter form and show the success box
+  document.getElementById('newsletter-form-container').style.display = 'none';
+  document.getElementById('newsletter-success').style.display = 'block';
+  // Persist state
+  localStorage.setItem('newsletterSubscribed', 'true');
+}
+
+// On page load, check if the user has subscribed and hide form if so
+window.addEventListener('DOMContentLoaded', function () {
+  if (localStorage.getItem('newsletterSubscribed') === 'true') {
+    // Hide form, show success message
+    const formContainer = document.getElementById('newsletter-form-container');
+    const successContainer = document.getElementById('newsletter-success');
+    if (formContainer && successContainer) {
+      formContainer.style.display = 'none';
+      successContainer.style.display = 'block';
+    }
+  }
+});
+
+document.getElementById('newsletterForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  // (your fetch logic here)
+  // ...on success, do:
+  hideNewsletterFormPermanently();
+});
