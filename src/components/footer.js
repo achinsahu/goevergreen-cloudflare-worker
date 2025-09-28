@@ -1,6 +1,6 @@
 /**
  * Footer Component for GoEvergreen Website
- * Handles footer content, links, and contact information
+ * Handles footer content, links, contact information, and persistent newsletter subscription box
  */
 
 export function generateFooter(pathname, env) {
@@ -15,7 +15,6 @@ export function generateFooter(pathname, env) {
                 <p>Empowering women with premium wellness guidance and health solutions.</p>
                 <p>Your trusted partner in achieving optimal health and vitality through science-based wellness strategies.</p>
             </div>
-            
             <div class="footer-section">
                 <h4>Wellness Resources</h4>
                 <ul>
@@ -25,7 +24,6 @@ export function generateFooter(pathname, env) {
                     <li><a href="/reviews" aria-label="Customer reviews and testimonials">Customer Reviews</a></li>
                 </ul>
             </div>
-            
             <div class="footer-section">
                 <h4>Support & Information</h4>
                 <ul>
@@ -35,22 +33,28 @@ export function generateFooter(pathname, env) {
                     <li><a href="/donate" aria-label="Support our mission">Support Our Mission</a></li>
                 </ul>
             </div>
-            
             <div class="footer-section">
                 <h4>Connect With Us</h4>
                 <div class="contact-info">
                     <p>📧 <strong>Email:</strong></p>
                     <p><a href="mailto:${contactEmail}" aria-label="Send us an email">${contactEmail}</a></p>
-                    
                     <p>💌 <strong>Newsletter:</strong></p>
-                    <p>Get expert wellness tips delivered to your inbox</p>
-                    
+                    <div id="newsletter-footer-form">
+                        <form id="footerNewsletterForm">
+                            <input type="email" name="email" placeholder="Enter your email" required>
+                            <input type="text" name="name" placeholder="Your name (optional)">
+                            <button type="submit">Subscribe</button>
+                        </form>
+                    </div>
+                    <div id="newsletter-footer-success" style="display:none;">
+                        <h4>✅ Successfully Subscribed!</h4>
+                        <p>Thank you! You'll get expert wellness tips by email.</p>
+                    </div>
                     <p>🌐 <strong>Website:</strong></p>
                     <p><a href="https://${domain}" aria-label="Visit our website">https://${domain}</a></p>
                 </div>
             </div>
         </div>
-        
         <div class="footer-bottom">
             <div class="footer-bottom-content">
                 <p>&copy; ${new Date().getFullYear()} GoEvergreen. All rights reserved.</p>
@@ -63,6 +67,32 @@ export function generateFooter(pathname, env) {
                 </div>
             </div>
         </div>
+        <script>
+          window.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('newsletterFooterSubscribed') === 'true') {
+              var formDiv = document.getElementById('newsletter-footer-form');
+              var successDiv = document.getElementById('newsletter-footer-success');
+              if (formDiv && successDiv) {
+                formDiv.style.display = 'none';
+                successDiv.style.display = 'block';
+              }
+            }
+            var footerForm = document.getElementById('footerNewsletterForm');
+            if (footerForm) {
+              footerForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                // Save state and hide form
+                localStorage.setItem('newsletterFooterSubscribed', 'true');
+                var formDiv = document.getElementById('newsletter-footer-form');
+                var successDiv = document.getElementById('newsletter-footer-success');
+                if (formDiv && successDiv) {
+                  formDiv.style.display = 'none';
+                  successDiv.style.display = 'block';
+                }
+              });
+            }
+          });
+        </script>
     </footer>
   `;
 }
@@ -77,7 +107,6 @@ export function getFooterStyles() {
         margin-top: 4rem;
         position: relative;
     }
-    
     .site-footer::before {
         content: '';
         position: absolute;
@@ -87,7 +116,6 @@ export function getFooterStyles() {
         height: 3px;
         background: linear-gradient(90deg, #7a9b8e 0%, #a8c09a 50%, #7a9b8e 100%);
     }
-    
     .footer-container {
         max-width: 1200px;
         margin: 0 auto;
@@ -96,11 +124,9 @@ export function getFooterStyles() {
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 2.5rem;
     }
-    
     .footer-section {
         padding: 1rem;
     }
-    
     .footer-section h3 {
         color: white;
         margin-bottom: 1.5rem;
@@ -108,7 +134,6 @@ export function getFooterStyles() {
         font-weight: 600;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
-    
     .footer-section h4 {
         color: #e8f5e8;
         margin-bottom: 1.2rem;
@@ -117,24 +142,20 @@ export function getFooterStyles() {
         border-bottom: 2px solid #7a9b8e;
         padding-bottom: 0.5rem;
     }
-    
     .footer-section p {
         margin-bottom: 1rem;
         line-height: 1.6;
         color: #c8d5ca;
     }
-    
     .footer-section ul {
         list-style: none;
         padding: 0;
     }
-    
     .footer-section ul li {
         margin-bottom: 0.8rem;
         position: relative;
         padding-left: 1.2rem;
     }
-    
     .footer-section ul li::before {
         content: '🌿';
         position: absolute;
@@ -142,40 +163,76 @@ export function getFooterStyles() {
         top: 0;
         font-size: 0.8rem;
     }
-    
     .footer-section a {
         color: #a8c09a;
         text-decoration: none;
         transition: all 0.3s ease;
         position: relative;
     }
-    
     .footer-section a:hover {
         color: white;
         padding-left: 0.5rem;
     }
-    
     .footer-section a:hover::before {
         content: '→';
         position: absolute;
         left: -0.5rem;
         transition: all 0.3s ease;
     }
-    
     .contact-info p {
         margin-bottom: 0.5rem;
     }
-    
     .contact-info strong {
         color: #e8f5e8;
     }
-    
+    #newsletter-footer-form form {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    #newsletter-footer-form input {
+        padding: 0.7rem;
+        border: 2px solid #a8c09a;
+        border-radius: 20px;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.3s ease;
+    }
+    #newsletter-footer-form input:focus {
+        border-color: #7a9b8e;
+    }
+    #newsletter-footer-form button {
+        background: #7a9b8e;
+        color: white;
+        border: none;
+        padding: 0.7rem 1.6rem;
+        border-radius: 20px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    #newsletter-footer-form button:hover {
+        background: #6a8b7e;
+        transform: translateY(-2px);
+    }
+    #newsletter-footer-success {
+        padding: 1rem;
+        border-radius: 10px;
+        background: #e8f5e8;
+        color: #155724;
+        font-weight: 500;
+        margin-bottom: 1rem;
+        border: 1px solid #7a9b8e;
+        text-align: center;
+    }
     .footer-bottom {
         background: rgba(0, 0, 0, 0.2);
         border-top: 1px solid #4a5a4e;
         padding: 1.5rem 0;
     }
-    
     .footer-bottom-content {
         max-width: 1200px;
         margin: 0 auto;
@@ -186,115 +243,90 @@ export function getFooterStyles() {
         flex-wrap: wrap;
         gap: 1rem;
     }
-    
     .footer-links {
         display: flex;
         align-items: center;
         gap: 1rem;
         flex-wrap: wrap;
     }
-    
     .footer-links a {
         color: #a8c09a;
         text-decoration: none;
         font-size: 0.9rem;
         transition: color 0.3s ease;
     }
-    
     .footer-links a:hover {
         color: white;
     }
-    
     .separator {
         color: #7a9b8e;
         font-weight: bold;
     }
-    
-    /* Responsive Footer */
     @media (max-width: 768px) {
         .footer-container {
             grid-template-columns: 1fr;
             text-align: center;
             gap: 2rem;
         }
-        
         .footer-section ul li {
             padding-left: 0;
             text-align: center;
         }
-        
         .footer-section ul li::before {
             display: none;
         }
-        
         .footer-bottom-content {
             flex-direction: column;
             text-align: center;
             gap: 1rem;
         }
-        
         .footer-links {
             justify-content: center;
         }
     }
-    
     @media (max-width: 480px) {
         .site-footer {
             padding: 2rem 0 0;
             margin-top: 2rem;
         }
-        
         .footer-container {
             padding: 0 1rem 1rem;
         }
-        
         .footer-section {
             padding: 0.5rem;
         }
-        
         .footer-section h3 {
             font-size: 1.3rem;
         }
-        
         .footer-section h4 {
             font-size: 1.1rem;
         }
-        
         .footer-links {
             flex-direction: column;
             gap: 0.5rem;
         }
-        
         .separator {
             display: none;
         }
     }
-    
-    /* Dark mode support */
     @media (prefers-color-scheme: dark) {
         .site-footer {
             background: linear-gradient(135deg, #1a2520 0%, #2a3530 100%);
         }
-        
         .footer-section h3,
         .footer-section h4 {
             color: #e8f5e8;
         }
-        
         .footer-section p {
             color: #b8c5ba;
         }
-        
         .footer-section a {
             color: #98b99a;
         }
-        
         .footer-section a:hover {
             color: #e8f5e8;
         }
     }
-    
-    /* Print styles */
     @media print {
         .site-footer {
             background: none !important;
@@ -302,51 +334,19 @@ export function getFooterStyles() {
             padding: 1rem 0 !important;
             border-top: 1px solid #ccc;
         }
-        
         .footer-section h3,
         .footer-section h4,
         .footer-section p,
         .footer-section a {
             color: #000 !important;
         }
-        
         .footer-bottom {
             background: none !important;
             border-top: 1px solid #ccc;
         }
-        
         .footer-section ul li::before {
             content: '•' !important;
         }
     }
   `;
 }
-// Hide/collapse newsletter after subscribing, and persist across navigations
-
-function hideNewsletterFormPermanently() {
-  // Hide the newsletter form and show the success box
-  document.getElementById('newsletter-form-container').style.display = 'none';
-  document.getElementById('newsletter-success').style.display = 'block';
-  // Persist state
-  localStorage.setItem('newsletterSubscribed', 'true');
-}
-
-// On page load, check if the user has subscribed and hide form if so
-window.addEventListener('DOMContentLoaded', function () {
-  if (localStorage.getItem('newsletterSubscribed') === 'true') {
-    // Hide form, show success message
-    const formContainer = document.getElementById('newsletter-form-container');
-    const successContainer = document.getElementById('newsletter-success');
-    if (formContainer && successContainer) {
-      formContainer.style.display = 'none';
-      successContainer.style.display = 'block';
-    }
-  }
-});
-
-document.getElementById('newsletterForm').addEventListener('submit', async function(e) {
-  e.preventDefault();
-  // (your fetch logic here)
-  // ...on success, do:
-  hideNewsletterFormPermanently();
-});
