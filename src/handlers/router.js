@@ -19,7 +19,20 @@ const ROUTES = {
 export async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const pathname = url.pathname;
-  
+  // === BEGIN FAVICON HANDLING ===
+if (
+  request.method === 'GET' &&
+  (pathname === '/favicon.ico' || pathname === '/assets/favicon.ico')
+) {
+  const domain = env.DOMAIN || 'goevergreen.shop';
+  return await fetch(`https://${domain}/assets/favicon.ico`, {
+    headers: {
+      'Content-Type': 'image/x-icon',
+      'Cache-Control': 'public, max-age=86400'
+    }
+  });
+}
+// === END FAVICON HANDLING ===
   try {
     // Handle WordPress admin panel routes - proxy directly without custom header/footer
     if (isAdminPath(pathname)) {
