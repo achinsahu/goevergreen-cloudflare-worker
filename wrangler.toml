@@ -1,4 +1,4 @@
-name = "worker-route"
+name = "worker-roue"
 main = "src/index.js"
 compatibility_date = "2024-09-25"
 compatibility_flags = ["nodejs_compat"]
